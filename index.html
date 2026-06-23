@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FF14 莫古挑戰：黃金的魔典 </title>
+    <style>
+        :root {
+            --ff-gold: #c2a64d; --ff-blue: #82caff; --ff-dark: #121212;
+            --ff-card: #2a2a2e; --ff-pink: #d63384; --ff-border: #444;
+            --ff-star-empty: #999; --ff-star-full: #ffd700;
+        }
+        body {
+            background-color: var(--ff-dark); color: #e0e0e0;
+            font-family: "Microsoft JhengHei", "Heiti TC", sans-serif;
+            margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center;
+        }
+
+        /* 懸浮總計欄 */
+        .sticky-summary {
+            position: fixed; top: 0; width: 100%; background: rgba(18, 18, 18, 0.95);
+            backdrop-filter: blur(8px); border-bottom: 2px solid var(--ff-gold);
+            padding: 10px 0; z-index: 1000; display: flex; justify-content: center;
+        }
+        .summary-content {
+            width: 90%; max-width: 1200px; display: flex; justify-content: space-between; align-items: center;
+        }
+        .timer-display { font-size: 0.8rem; color: #aaa; margin-top: 5px; }
+        .timer-time { color: var(--ff-blue); font-weight: bold; margin-left: 5px; }
+        .total-badge {
+            background: linear-gradient(135deg, var(--ff-pink), #8a1a4d);
+            padding: 8px 25px; border-radius: 50px; font-weight: bold; font-size: 1.3rem;
+            box-shadow: 0 4px 15px rgba(214, 51, 132, 0.4); border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        /* 按鈕工具列 */
+        .content-tools {
+            width: 92%; max-width: 1200px; margin-top: 130px; margin-bottom: 15px;
+            display: flex; justify-content: flex-end; gap: 10px;
+        }
+        .tool-btn {
+            background: #333; color: white; border: 1px solid var(--ff-border);
+            padding: 8px 15px; border-radius: 5px; cursor: pointer; transition: 0.2s; font-size: 0.9rem;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .tool-btn:hover { border-color: var(--ff-gold); background: #444; }
+
+        /* 頁籤 */
+        .filter-tabs { width: 92%; max-width: 1200px; margin-bottom: 25px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        .tab-btn {
+            background: #333; border: 1px solid var(--ff-gold); color: white;
+            padding: 10px 20px; border-radius: 5px; cursor: pointer; transition: 0.2s;
+        }
+        .tab-btn.active { background: var(--ff-gold); color: black; font-weight: bold; }
+        .tab-fav { color: var(--ff-star-full) !important; border-color: var(--ff-star-full) !important; }
+
+        /* --- 網格模式 (Grid Mode) --- */
+        .grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px; width: 92%; max-width: 1200px; padding-bottom: 100px;
+        }
+        .card {
+            background: var(--ff-card); border: 1px solid var(--ff-border);
+            border-radius: 10px; overflow: hidden; display: flex; flex-direction: column;
+            position: relative; transition: 0.2s;
+        }
+        .card:hover { border-color: var(--ff-gold); transform: translateY(-3px); }
+
+        /* --- 列表模式 (List Mode) --- 依照圖 868ba7 格式化 */
+        .grid.list-view { display: flex; flex-direction: column; gap: 5px; }
+        .grid.list-view .card { flex-direction: row; align-items: center; padding: 5px 20px; height: auto; }
+        .grid.list-view .img-box { display: none; } /* 列表模式隱藏格子圖 */
+        .grid.list-view .star-icon { position: static; margin-right: 15px; }
+        .grid.list-view .card-body { padding: 0; flex-direction: row; align-items: center; flex-grow: 1; justify-content: flex-start; gap: 15px; }
+        
+        /* 列表模式下的文字排版 */
+        .grid.list-view .item-name { min-height: auto; margin: 0; font-size: 1rem; flex: 0 0 auto; min-width: 180px; }
+        .grid.list-view .item-desc { 
+            display: inline-block; margin: 0; font-size: 0.8rem; color: #777; 
+            flex-grow: 1; border-left: 1px solid #444; padding-left: 15px;
+        }
+        
+        .grid.list-view .card-foot { border: none; padding: 0; flex: 0 0 auto; gap: 15px; }
+        
+        /* 列表模式詳細按鈕 */
+        .details-btn {
+            display: none; background: transparent; border: 1px solid var(--ff-gold); color: var(--ff-gold);
+            padding: 3px 10px; border-radius: 4px; cursor: pointer; font-size: 0.75rem;
+        }
+        .grid.list-view .details-btn { display: inline-block; }
+
+        /* 星星 */
+        .star-icon {
+            position: absolute; top: 10px; left: 10px; z-index: 100;
+            font-size: 1.5rem; color: var(--ff-star-empty); cursor: pointer; text-shadow: 0 0 5px #000;
+        }
+        .star-icon.active { color: var(--ff-star-full); }
+
+        /* 圖片容器 */
+        .img-box {
+            width: 100%; aspect-ratio: 1/1; background: #000;
+            display: flex; align-items: center; justify-content: center; cursor: zoom-in;
+        }
+        .img-box img { width: auto; height: auto; max-width: 95%; max-height: 95%; object-fit: contain; }
+
+        .card-body { padding: 15px; display: flex; flex-direction: column; }
+        .item-name { font-size: 1rem; font-weight: bold; color: var(--ff-gold); min-height: 2.8rem; line-height: 1.4; }
+        .item-desc { font-size: 0.8rem; color: #999; margin: 8px 0; flex-grow: 1; }
+        .card-foot { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #444; padding-top: 10px; }
+        .stone-price { color: var(--ff-blue); font-weight: bold; }
+        input[type="number"] { width: 60px; background: #000; border: 1px solid var(--ff-gold); color: #fff; text-align: center; padding: 5px; border-radius: 4px; }
+
+        /* 燈箱 */
+        #image-modal {
+            display: none; position: fixed; z-index: 2000; top: 0; left: 0;
+            width: 100%; height: 100%; background: rgba(0,0,0,0.9);
+            align-items: center; justify-content: center; cursor: zoom-out;
+        }
+        #image-modal img { max-width: 480px; width: 90%; border: 3px solid var(--ff-gold); border-radius: 8px; }
+    </style>
+</head>
+<body>
+
+    <div class="sticky-summary">
+        <div class="summary-content">
+            <div>
+                <span style="color: var(--ff-gold); font-weight: bold; font-size: 1.2rem;">FF14 莫古莫古★大收集</span>
+                <span style="font-size: 0.8rem; color: #888;">黃金的魔典</span>
+                <div class="timer-display">周任刷新倒數：<span class="timer-time" id="reset-timer">計算中...</span></div>
+            </div>
+            <div class="total-badge">總需神石：<span id="grand-total">0</span></div>
+        </div>
+    </div>
+
+    <div class="content-tools">
+        <button class="tool-btn" onclick="toggleViewMode()">📺 切換顯示模式</button>
+        <button class="tool-btn" onclick="resetQuantities()">🔄 重置數量</button>
+    </div>
+
+    <div class="filter-tabs">
+        <button class="tab-btn active" data-filter="all">全部道具</button>
+        <button class="tab-btn tab-fav" data-filter="favorites">★ 最愛追蹤</button>
+        <button class="tab-btn" data-filter="mount">坐騎/飾品</button>
+        <button class="tab-btn" data-filter="gear">外觀/動作/家具</button>
+        <button class="tab-btn" data-filter="etc">幻卡/地圖/其他</button>
+    </div>
+
+    <div class="grid" id="main-grid"></div>
+
+    <div id="image-modal" onclick="this.style.display='none'">
+        <img id="modal-img" src="" alt="詳細圖">
+    </div>
+
+    <script>
+        // 道具資料庫 (備註文字已設定在 d 欄位)
+        const items = [
+{ n: "猴面雀耳墜", p: 100, c: "mount", d: "本次活動新登場", e: ".png" },
+{ n: "火神夾克衫", p: 50, c: "mount", d: "本次活動新登場", e: ".png" },
+{ n: "暗影玲龍魔笛", p: 50, c: "mount", d: "LV80極黑迪斯副本", e: ".png" },
+{ n: "飛隼號啟動鑰匙", p: 50, c: "mount", d: "本次活動新登場", e: ".jpg" },
+{ n: "魔法飛床", p: 50, c: "mount", d: "LV80木工、50萬+", e: ".png" },
+{ n: "天佑裝甲", p: 50, c: "mount", d: "博茲雅女王古殿掉落", e: ".png" },
+{ n: "小小古代人", p: 50, c: "mount", d: "LV80黑風海底阿尼德羅追憶館", e: ".png" },
+{ n: "管弦樂琴樂譜：原始的墮天使", p: 50, c: "mount", d: "伊甸希望樂園 共鳴之章2", e: ".png" },
+{ n: "髮型樣式：髮箍式編髮", p: 30, c: "mount", d: "新月島-南征/銀銅箱、優雷卡-湧火/幸福兔金銀箱", e: ".jpg" },
+{ n: "趣味圓點陽傘", p: 30, c: "mount", d: "博茲雅晶簇x25", e: ".png" },
+{ n: "演技教材・背靠", p: 30, c: "mount", d: "蒼天街-振興票x1800/慶典箱、7.2遺物探索", e: ".png" },
+{ n: "金碟幣白金卡", p: 30, c: "mount", d: "5萬金碟幣", e: ".png" },
+{ n: "水龍蜥角笛", p: 30, c: "mount", d: "魚人族有好部落+12萬Gil", e: ".jpg" },
+{ n: "炸彈角笛", p: 30, c: "mount", d: "地靈族有好部落+12萬Gil", e: ".jpg" },
+{ n: "夢幻神威魔笛", p: 30, c: "mount", d: "極神龍討滅戰", e: ".jpg" },
+{ n: "青君神威魔笛", p: 30, c: "mount", d: "極青龍討滅戰", e: ".jpg" },
+{ n: "森林舊椅子", p: 20, c: "mount", d: "LV86木工", e: ".png" },
+{ n: "配藥工作臺", p: 20, c: "mount", d: "LV86煉金", e: ".png" },
+{ n: "花樣蠟燭套裝", p: 20, c: "mount", d: "LV86煉金", e: ".png" },
+{ n: "貓小胖地毯", p: 20, c: "mount", d: "LV86裁縫", e: ".png" },
+{ n: "鬆軟鬆餅套餐", p: 20, c: "mount", d: "Lv86烹飪", e: ".png" },
+{ n: "風精靈娃娃", p: 15, c: "mount", d: "風精靈族有好部落+2.5萬Gil", e: ".png" },
+{ n: "斯卡拉系列裝備", p: 15, c: "mount", d: "不要浪費錢系列每件15，共14件-lv70沉沒神殿斯卡拉遺跡", e: ".jpg" },
+{ n: "陳舊的特殊地圖S系列", p: 15, c: "etc", d: "活動限定藏寶圖-LV70/80/90/90，必定觸發魔紋，S4必開輪盤", e: ".png" },
+{ n: "詳細地圖(共6區)", p: 10, c: "etc", d: "兵團徽章x250個-3.0/4.0完成可兌換", e: ".png" },
+{ n: "九宮幻卡：智蛙_奧諾魯瓦", p: 10, c: "mount", d: "田園郡，青花/伊修加爾德，福爾唐家管家，完成前置任務後可兌換", e: ".png" },
+{ n: "幻卡：漆黑導師_光之戰士（漆黑）_伊甸之約", p: 7, c: "mount", d: "魔法宮殿宇宙宮/光之戰士殲滅戰/伊甸希望樂園 再生之章4，完成前置任務後可兌換", e: ".png" },
+{ n: "小鴨嘴獸", p: 7, c: "mount", d: "怪物狩獵戰利品x800", e: ".jpg" },
+{ n: "豬小仙", p: 7, c: "mount", d: "雇員森林探索、新月島寶箱、優雷卡寶箱、朝聖教錯路寶箱", e: ".png" },
+{ n: "管弦樂琴樂譜：夢園之門", p: 7, c: "mount", d: "仙子族-幻精幣x6", e: ".png" },
+{ n: "克里耶蘿蔔 ×5", p: 5, c: "mount", d: "栽培", e: ".png" },
+{ n: "魔法稜晶：職業大師", p: 1, c: "mount", d: "特效消耗品 x 5", e: ".png" },
+        ];
+
+        let viewMode = localStorage.getItem('mog_view_mode') || 'grid';
+        const gridEl = document.getElementById('main-grid');
+
+        function init() {
+            gridEl.innerHTML = '';
+            if(viewMode === 'list') gridEl.classList.add('list-view');
+            else gridEl.classList.remove('list-view');
+
+            items.forEach((item) => {
+                const savedQty = localStorage.getItem(`mog_qty_${item.n}`) || 0;
+                const isFav = localStorage.getItem(`mog_fav_${item.n}`) === 'true';
+
+                const card = document.createElement('div');
+                card.className = `card ${item.c}`;
+                card.setAttribute('data-category', item.c);
+                card.setAttribute('data-name', item.n);
+                
+                card.innerHTML = `
+                    <div class="star-icon ${isFav ? 'active' : ''}" onclick="toggleFav('${item.n}', this)">★</div>
+                    <div class="img-box" onclick="zoomImg('img/${item.n}${item.e}')">
+                        <img src="img/${item.n}${item.e}" onerror="this.src='https://via.placeholder.com/200?text=Missing'">
+                    </div>
+                    <div class="card-body">
+                        <div class="item-name">${item.n}</div>
+                        <div class="item-desc">${item.d}</div>
+                        <div class="card-foot">
+                            <span class="stone-price">💎 ${item.p}</span>
+                            <input type="number" class="qty-input" value="${savedQty}" min="0" data-price="${item.p}" data-name="${item.n}" oninput="updateQty(this)">
+                            <button class="details-btn" onclick="zoomImg('img/${item.n}${item.e}')">詳細</button>
+                        </div>
+                    </div>
+                `;
+                gridEl.appendChild(card);
+            });
+            updateTotal();
+        }
+
+        function toggleViewMode() {
+            viewMode = (viewMode === 'grid') ? 'list' : 'grid';
+            localStorage.setItem('mog_view_mode', viewMode);
+            init();
+            const activeFilter = document.querySelector('.tab-btn.active').dataset.filter;
+            applyFilter(activeFilter);
+        }
+
+        function updateQty(el) {
+            localStorage.setItem(`mog_qty_${el.dataset.name}`, el.value);
+            updateTotal();
+        }
+
+        function updateTotal() {
+            let t = 0;
+            document.querySelectorAll('.qty-input').forEach(i => t += (parseInt(i.value)||0) * parseInt(i.dataset.price));
+            document.getElementById('grand-total').innerText = t.toLocaleString();
+        }
+
+        function resetQuantities() {
+            if(confirm('確定清除所有數量？')) {
+                document.querySelectorAll('.qty-input').forEach(i => { i.value = 0; localStorage.removeItem(`mog_qty_${i.dataset.name}`); });
+                updateTotal();
+            }
+        }
+
+        function toggleFav(n, el) {
+            const active = el.classList.toggle('active');
+            localStorage.setItem(`mog_fav_${n}`, active);
+        }
+
+        function zoomImg(src) {
+            document.getElementById('modal-img').src = src;
+            document.getElementById('image-modal').style.display = 'flex';
+        }
+
+        function applyFilter(filter) {
+            document.querySelectorAll('.card').forEach(card => {
+                if (filter === 'all') card.style.display = 'flex';
+                else if (filter === 'favorites') {
+                    const isFav = localStorage.getItem(`mog_fav_${card.dataset.name}`) === 'true';
+                    card.style.display = isFav ? 'flex' : 'none';
+                } else {
+                    card.style.display = (card.dataset.category === filter) ? 'flex' : 'none';
+                }
+            });
+        }
+
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                applyFilter(this.dataset.filter);
+            });
+        });
+
+        function updateTimer() {
+            const now = new Date();
+            let reset = new Date();
+            reset.setDate(now.getDate() + (9 - now.getDay()) % 7);
+            reset.setHours(16, 0, 0, 0);
+            if (reset <= now) reset.setDate(reset.getDate() + 7);
+            const diff = reset - now;
+            const d = Math.floor(diff / 86400000);
+            const h = Math.floor((diff % 86400000) / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            document.getElementById('reset-timer').innerText = `${d}天 ${h}時 ${m}分 ${s}秒`;
+        }
+        setInterval(updateTimer, 1000);
+        updateTimer();
+        init();
+    </script>
+<!-- ===== 版權聲明 Footer ===== -->
+    <footer style="
+        width: 92%; max-width: 1200px;
+        margin: 40px auto 20px;
+        padding: 20px;
+        border-top: 1px solid #444;
+        font-size: 0.75rem;
+        color: #666;
+        line-height: 1.8;
+        text-align: center;
+    ">
+        <p>
+            FINAL FANTASY XIV &copy; 2010&ndash;2025 SQUARE ENIX CO., LTD. All Rights Reserved.<br>
+            FINAL FANTASY is a registered trademark of Square Enix Holdings Co., Ltd.
+        </p>
+        <p>
+            本頁面為非官方個人整理工具，未獲 Square Enix 官方授權或認可。<br>
+            道具圖片來源：
+            <a href="https://ffxiv.consolegameswiki.com/wiki/" target="_blank"
+               style="color: #888; text-decoration: underline;">
+                FFXIV Console Games Wiki
+            </a>
+            ，依該 Wiki 授權條款（CC BY-SA 3.0）使用。
+        </p>
+    </footer>
+
+</body>
+</body>
+</html>
